@@ -1,51 +1,105 @@
+# app.py
+
 import streamlit as st
-import pandas as pd
 import joblib
+import pandas as pd
 
-# Load the trained model and scaler
-model = joblib.load('attrition_model.pkl')
-scaler = joblib.load('scaler.pkl')
+# Load model, scaler, and expected column order
+try:
+    model = joblib.load('attrition_model.pkl')
+    scaler = joblib.load('scaler.pkl')
+    model_columns = joblib.load('model_columns.pkl')  # List of expected columns
+except Exception as e:
+    st.error(f"🚨 Error loading model, scaler, or columns: {e}")
+    st.stop()
 
-# App title
-st.title("Employee Attrition Prediction App")
+# Title and Description
+st.title("💼 Employee Attrition Predictor")
+st.markdown("🔍 Enter employee details to predict if they're likely to leave the company.")
 
-# Input form
-st.header("Enter Employee Details")
+# Function to collect user input
+def user_input():
+    # Numeric Inputs
+    Age = st.slider('🎂 Age', 18, 60, 30)
+    DistanceFromHome = st.slider('📍 Distance From Home (in km)', 1, 30, 10)
+    MonthlyIncome = st.slider('💰 Monthly Income (₹)', 1000, 20000, 5000)
+    JobSatisfaction = st.slider('🙂 Job Satisfaction (1 - Low, 4 - High)', 1, 4, 2)
+    EnvironmentSatisfaction = st.slider('🏢 Environment Satisfaction (1 - Low, 4 - High)', 1, 4, 2)
+    YearsAtCompany = st.slider('📅 Years at Company', 0, 40, 5)
+    WorkLifeBalance = st.slider('⚖️ Work-Life Balance (1 - Bad, 4 - Best)', 1, 4, 2)
+    OverTime = st.selectbox("⏰ OverTime", ['Yes', 'No'])
 
-age = st.slider("Age", 18, 60, 30)
-distance = st.slider("Distance From Home (in km)", 1, 30, 5)
-income = st.number_input("Monthly Income (₹)", min_value=1000, max_value=100000, value=30000, step=500)
-job_satisfaction = st.selectbox("Job Satisfaction (1 = Low, 4 = High)", [1, 2, 3, 4])
-env_satisfaction = st.selectbox("Environment Satisfaction (1 = Low, 4 = High)", [1, 2, 3, 4])
-years_at_company = st.slider("Years at Company", 0, 40, 5)
-work_life_balance = st.selectbox("Work Life Balance (1 = Bad, 4 = Excellent)", [1, 2, 3, 4])
-overtime = st.selectbox("OverTime", ["No", "Yes"])
+    # Convert OverTime to binary
+    OverTime = 1 if OverTime == 'Yes' else 0
 
-# Convert OverTime to binary
-overtime_binary = 1 if overtime == "Yes" else 0
+    # Categorical Inputs
+    BusinessTravel = st.selectbox('🧳 Business Travel', ['Travel_Rarely', 'Travel_Frequently', 'Non-Travel'])
+    DailyRate = st.slider('📊 Daily Rate', 100, 1500, 500)
+    Department = st.selectbox('🏢 Department', ['Sales', 'Research & Development', 'Human Resources'])
+    Education = st.slider('🎓 Education (1-Below College, 5-Doctor)', 1, 5, 3)
+    EducationField = st.selectbox('📚 Education Field', ['Life Sciences', 'Medical', 'Marketing', 'Technical Degree', 'Human Resources', 'Other'])
+    Gender = st.selectbox('👤 Gender', ['Male', 'Female'])
+    JobRole = st.selectbox('💼 Job Role', ['Sales Executive', 'Research Scientist', 'Laboratory Technician', 'Manufacturing Director',
+                                          'Healthcare Representative', 'Manager', 'Sales Representative', 'Research Director', 'Human Resources'])
+    MaritalStatus = st.selectbox('💍 Marital Status', ['Single', 'Married', 'Divorced'])
 
-# Prediction button
-if st.button("Predict Attrition"):
-    input_data = pd.DataFrame([{
-        "Age": age,
-        "DistanceFromHome": distance,
-        "MonthlyIncome": income,
-        "JobSatisfaction": job_satisfaction,
-        "EnvironmentSatisfaction": env_satisfaction,
-        "YearsAtCompany": years_at_company,
-        "WorkLifeBalance": work_life_balance,
-        "OverTime": overtime_binary
-    }])
+    # Create DataFrame
+    data = {
+        'Age': Age,
+        'DistanceFromHome': DistanceFromHome,
+        'MonthlyIncome': MonthlyIncome,
+        'JobSatisfaction': JobSatisfaction,
+        'EnvironmentSatisfaction': EnvironmentSatisfaction,
+        'YearsAtCompany': YearsAtCompany,
+        'WorkLifeBalance': WorkLifeBalance,
+        'OverTime': OverTime,
+        'BusinessTravel': BusinessTravel,
+        'DailyRate': DailyRate,
+        'Department': Department,
+        'Education': Education,
+        'EducationField': EducationField,
+        'Gender': Gender,
+        'JobRole': JobRole,
+        'MaritalStatus': MaritalStatus
+    }
 
-    # Scale the input
-    input_scaled = scaler.transform(input_data)
+    return pd.DataFrame([data])
 
-    # Predict
-    prediction = model.predict(input_scaled)
-    prob = model.predict_proba(input_scaled)[0][1]
+# Collect input
+input_df = user_input()
 
-    # Output
-    if prediction[0] == 1:
-        st.error(f"⚠️ The employee is likely to leave the company. (Attrition Probability: {prob:.2f})")
-    else:
-        st.success(f"✅ The employee is likely to stay. (Attrition Probability: {prob:.2f})")
+# Show raw input
+st.subheader("🧾 Input Summary")
+st.write(input_df)
+
+# Preprocess input
+try:
+    # One-hot encode categorical columns
+    input_encoded = pd.get_dummies(input_df)
+
+    # Add missing columns from training
+    for col in model_columns:
+        if col not in input_encoded.columns:
+            input_encoded[col] = 0
+
+    # Ensure column order matches training
+    input_encoded = input_encoded[model_columns]
+
+    # Show preprocessed input (optional)
+    # st.write("Preprocessed Input:")
+    # st.write(input_encoded)
+
+    # Scale
+    input_scaled = scaler.transform(input_encoded)
+
+    # Predict on button click
+    if st.button("📊 Predict"):
+        prediction = model.predict(input_scaled)
+        st.subheader("🎯 Prediction Result")
+        if prediction[0] == 1:
+            st.error("⚠️ The employee is **likely to leave** the company.")
+        else:
+            st.success("✅ The employee is **likely to stay** with the company.")
+
+except Exception as e:
+    st.error(f"🚨 Prediction error: {e}")

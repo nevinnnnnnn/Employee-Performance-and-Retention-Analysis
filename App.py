@@ -1,56 +1,51 @@
 import streamlit as st
-import joblib
 import pandas as pd
+import joblib
 
-# Load model and scaler
+# Load the trained model and scaler
 model = joblib.load('attrition_model.pkl')
 scaler = joblib.load('scaler.pkl')
 
-# Title and Description
-st.title("💼 Employee Attrition Predictor")
-st.markdown("🔍 Enter employee details to predict if they're likely to leave the company.")
+# App title
+st.title("Employee Attrition Prediction App")
 
-# Function to collect user input
-def user_input():
-    Age = st.slider('🎂 Age', 18, 60, 30)
-    DistanceFromHome = st.slider('📍 Distance From Home (in km)', 1, 30, 10)
-    MonthlyIncome = st.slider('💰 Monthly Income (₹)', 1000, 20000, 5000)
-    JobSatisfaction = st.slider('🙂 Job Satisfaction (1 - Low, 4 - High)', 1, 4, 2)
-    EnvironmentSatisfaction = st.slider('🏢 Environment Satisfaction (1 - Low, 4 - High)', 1, 4, 2)
-    YearsAtCompany = st.slider('📅 Years at Company', 0, 40, 5)
-    WorkLifeBalance = st.slider('⚖️ Work-Life Balance (1 - Bad, 4 - Best)', 1, 4, 2)
-    OverTime = st.selectbox("⏰ OverTime", ['Yes', 'No'])
+# Input form
+st.header("Enter Employee Details")
 
-    # Convert OverTime to binary
-    OverTime = 1 if OverTime == 'Yes' else 0
+age = st.slider("Age", 18, 60, 30)
+distance = st.slider("Distance From Home (in km)", 1, 30, 5)
+income = st.number_input("Monthly Income (₹)", min_value=1000, max_value=100000, value=30000, step=500)
+job_satisfaction = st.selectbox("Job Satisfaction (1 = Low, 4 = High)", [1, 2, 3, 4])
+env_satisfaction = st.selectbox("Environment Satisfaction (1 = Low, 4 = High)", [1, 2, 3, 4])
+years_at_company = st.slider("Years at Company", 0, 40, 5)
+work_life_balance = st.selectbox("Work Life Balance (1 = Bad, 4 = Excellent)", [1, 2, 3, 4])
+overtime = st.selectbox("OverTime", ["No", "Yes"])
 
-    data = {
-        'Age': Age,
-        'DistanceFromHome': DistanceFromHome,
-        'MonthlyIncome': MonthlyIncome,
-        'JobSatisfaction': JobSatisfaction,
-        'EnvironmentSatisfaction': EnvironmentSatisfaction,
-        'YearsAtCompany': YearsAtCompany,
-        'WorkLifeBalance': WorkLifeBalance,
-        'OverTime': OverTime
-    }
+# Convert OverTime to binary
+overtime_binary = 1 if overtime == "Yes" else 0
 
-    return pd.DataFrame([data])
+# Prediction button
+if st.button("Predict Attrition"):
+    input_data = pd.DataFrame([{
+        "Age": age,
+        "DistanceFromHome": distance,
+        "MonthlyIncome": income,
+        "JobSatisfaction": job_satisfaction,
+        "EnvironmentSatisfaction": env_satisfaction,
+        "YearsAtCompany": years_at_company,
+        "WorkLifeBalance": work_life_balance,
+        "OverTime": overtime_binary
+    }])
 
-# Get user input
-input_df = user_input()
+    # Scale the input
+    input_scaled = scaler.transform(input_data)
 
-# Predict only if button is clicked
-if st.button("📊 Predict"):
-    # Scale input
-    input_scaled = scaler.transform(input_df)
-
-    # Make prediction
+    # Predict
     prediction = model.predict(input_scaled)
+    prob = model.predict_proba(input_scaled)[0][1]
 
-    # Display result
-    st.subheader("🎯 Prediction Result")
+    # Output
     if prediction[0] == 1:
-        st.error("⚠️ The employee is **likely to leave** the company.")
+        st.error(f"⚠️ The employee is likely to leave the company. (Attrition Probability: {prob:.2f})")
     else:
-        st.success("✅ The employee is **likely to stay** with the company.")
+        st.success(f"✅ The employee is likely to stay. (Attrition Probability: {prob:.2f})")
